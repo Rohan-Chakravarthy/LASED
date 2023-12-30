@@ -60,6 +60,53 @@ def timeEvolution(n, E, G, Q, Q_decay, tau, laser_intensity, laser_wavelength, t
             for e in E:
                 rho_output[index(g, e, n)][position] = rho_t[index(g, e, n), 0]
 
+def timeEvolutionParallel(n, E, G, Q, Q_decay, tau, laser_intensity, laser_wavelength, time, rho0, rho_output,
+                    tau_f = None, tau_b = None, detuning = None, rabi_scaling = None, rabi_factors = None,
+                    print_eq = None, atomic_velocity = None, pretty_print_eq = None, pretty_print_eq_tex = None,
+                    pretty_print_eq_pdf = None, pretty_print_eq_filename = None):
+    """Calculates the time evolution of a laser-atom system.
+
+    Uses a flattened density matrix rho0 and calculates the time evolution over the time specified.
+    The density matrix at each time step is stored in rho_output.
+    """
+
+    rabi = halfRabiFreq(laser_intensity, tau, laser_wavelength)
+
+    A = timeEvolutionMatrixParallel(n, E, G, Q, Q_decay, tau, laser_wavelength, laser_intensity,
+                        tau_f = tau_f, tau_b = tau_b, detuning = detuning, rabi_scaling = rabi_scaling,
+                        rabi_factors = rabi_factors, numeric_print = print_eq, atomic_velocity = atomic_velocity,
+                        pretty_print_eq = pretty_print_eq, pretty_print_eq_tex = pretty_print_eq_tex,
+                        pretty_print_eq_pdf = pretty_print_eq_pdf, pretty_print_eq_filename = pretty_print_eq_filename)
+
+    # Compute the flattened diagonalised matrix D in vector form (d) and matrix of eigenvectors V
+    d, V = la.eig(A)
+    f = np.dot(la.inv(V), rho0)  # Compute V^-1*rho(0)
+
+    # Calculate the exponential
+    for position, t in enumerate(time, start = 0):
+
+        expS = np.diag(np.exp(d*t)) # Compute exp(D*t) directly from the diagonised matrix
+        VexpDt = np.dot(V, expS)
+        rho_t = np.dot(VexpDt, f)
+        
+        # Append density matrix elements
+        # rho(t)_ee
+        for e in E:
+            for ep in E:
+                rho_output[index(e, ep, n)][position] = rho_t[index(e, ep, n), 0]
+        # rho(t)_gg
+        for g in G:
+            for gp in G:
+                rho_output[index(g, gp, n)][position] = rho_t[index(g, gp, n), 0]
+        # rho(t)_eg
+        for e in E:
+            for g in G:
+                rho_output[index(e, g, n)][position] = rho_t[index(e, g, n), 0]
+        #rho(t)_ge
+        for g in G:
+            for e in E:
+                rho_output[index(g, e, n)][position] = rho_t[index(g, e, n), 0]
+
 def timeEvolutionDopplerAveraging(n, E, G, Q, Q_decay, tau, laser_intensity, laser_wavelength, doppler_width,
                                     doppler_detunings, time, rho0, rho_output, tau_f = None, tau_b = None,
                                     detuning = None, rabi_scaling = None, rabi_factors = None, print_eq = None,
