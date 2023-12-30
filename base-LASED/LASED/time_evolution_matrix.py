@@ -62,6 +62,67 @@ def timeEvolutionMatrix(n, E, G, Q, Q_decay, tau, laser_wavelength, laser_intens
                             pretty_print_eq_pdf = pretty_print_eq_pdf, pretty_print_eq_filename = pretty_print_eq_filename)
     return A
 
+def timeEvolutionMatrixParallel(n, E, G, Q, Q_decay, tau, laser_wavelength, laser_intensity,
+                        tau_f = None, tau_b = None, detuning = None, numeric_print = None,
+                       rabi_scaling = None, rabi_factors = None, atomic_velocity = None,
+                       pretty_print_eq = None, pretty_print_eq_tex = None,
+                       pretty_print_eq_pdf = None, pretty_print_eq_filename = None):
+    """Function to create and populate the coupled differential equation matrix A for the laser-atom system.
+
+    Returns:
+        ndarray: Matrix which contains all thera coefficients for the set of coupled differential equations describing a laser-atom system.
+    """
+
+    # Initialise matrix with zeros
+    A = np.zeros((n*n,n*n), dtype = np.complex)
+
+    # Calculate half-Rabi frequency
+    rabi = halfRabiFreq(laser_intensity, tau, laser_wavelength)
+    if(rabi_scaling != None):  # For normalising the rabi frequency
+        rabi = rabi*rabi_scaling
+    else:
+        rabi_scaling = 1  # For symbolic printing
+
+    if(rabi_factors != None):
+        if(len(rabi_factors) != len(Q)):
+            print("rabi_factors must be the same length as Q! Each element of Q is multiplied by the corresponding rabi_factor.")
+    else:
+        rabi_factors = [1 for q in Q]  # Set Rabi factors to 1
+
+    # Initialise null parameters
+    if(atomic_velocity == None):
+        atomic_velocity = 0
+
+    # Populate A matrixdef populate_matrix_wrapper(args):
+    func, matrix, args_dict = args
+    func(matrix, **args_dict)
+
+    args_list = [
+        (rho_ggpp, A, {"n": n, "E": E, "G": G, "Q": Q, "Q_decay": Q_decay, "tau": tau,
+                       "rabi": rabi, "rabi_factors": rabi_factors, "tau_b": tau_b, "numeric_print": numeric_print}),
+        (rho_eepp, A, {"n": n, "E": E, "G": G, "Q": Q, "Q_decay": Q_decay, "tau": tau,
+                       "rabi": rabi, "rabi_factors": rabi_factors, "tau_f": tau_f, "numeric_print": numeric_print}),
+        (rho_ge, A, {"n": n, "E": E, "G": G, "Q": Q, "Q_decay": Q_decay, "tau": tau,
+                      "rabi": rabi, "rabi_factors": rabi_factors, "laser_wavelength": laser_wavelength,
+                      "atomic_velocity": atomic_velocity, "tau_f": tau_f, "tau_b": tau_b, "detuning": detuning,
+                      "numeric_print": numeric_print}),
+        (rho_eg, A, {"n": n, "E": E, "G": G, "Q": Q, "Q_decay": Q_decay, "tau": tau,
+                      "rabi": rabi, "rabi_factors": rabi_factors, "laser_wavelength": laser_wavelength,
+                      "atomic_velocity": atomic_velocity, "tau_f": tau_f, "tau_b": tau_b, "detuning": detuning,
+                      "numeric_print": numeric_print})
+    ]
+    
+    with multiprocessing.Pool(processes=num_processes) as pool:
+        pool.map(populate_matrix_wrapper, args_list)
+      
+    # Symbolic Printing
+    if(pretty_print_eq or pretty_print_eq_pdf or pretty_print_eq_tex):
+        symbolicPrintSystem(n, E, G, Q, Q_decay, tau_f, tau_b, detuning,
+                            laser_wavelength, atomic_velocity, rabi_scaling, rabi_factors,
+                            pretty_print_eq = pretty_print_eq, pretty_print_eq_tex = pretty_print_eq_tex,
+                            pretty_print_eq_pdf = pretty_print_eq_pdf, pretty_print_eq_filename = pretty_print_eq_filename)
+    return A
+
 def rho_ggpp(A, n, E, G, Q, Q_decay, tau, rabi, rabi_factors, tau_b = None, numeric_print = None):
     """ Function to populate the matrix A with coefficients for populations and atomic coherences of the ground states.
     """
